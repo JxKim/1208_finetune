@@ -57,7 +57,7 @@ class Qwen3Model(nn.Module):
         x = tok_embeds # shape: [batch_size, num_tokens, embed_dim]
 
         num_tokens = x.shape[1]
-        if cache is not None: # decode阶段
+        if cache is not None and len(cache) > 0 : # decode阶段
             pos_start = self.current_pos
             pos_end = pos_start + num_tokens
             self.current_pos = pos_end
@@ -76,12 +76,12 @@ class Qwen3Model(nn.Module):
         mask = mask.unsqueeze(0).unsqueeze(0)
 
         for i, block in enumerate(self.trf_blocks):
-            blk_cache = cache.get(i) if cache else None
+            blk_cache = cache.get(i) if cache is not None else None
             x, new_blk_cache = block(x, mask, self.cos, self.sin,
                                      start_pos=pos_start,
                                      cache=blk_cache)
             if cache is not None:
-                cache.update(i, new_blk_cache)
+                cache[i] = new_blk_cache
 
         # 输出前先进行层归一化
         x = self.final_norm(x)
@@ -411,18 +411,50 @@ class Qwen3Tokenizer:
                 s += "\n<think>\n\n</think>\n\n"
         return s
 
-def generate_text(input_ids,model:Qwen3Model,tokenizer:Qwen3Tokenizer):
-
-    import torch
-
-    with torch.no_grad():
-        output_logits = model(input_ids)
-        # 使用贪心策略，
-        res = output_logits.argmax(dim=-1) # shape:batch_size,seq_len
+def generate_text(input_ids,model:Qwen3Model,tokenizer:Qwen3Tokenizer,max_len:int=100):
     
-    res_list = res.tolist()
+    
+
+    # 每次调用时，重置一下current_pos位置的值
+    model.reset_kv_cache()
+    generated_token = 0
+    final_output = input_ids.clone()
+    kv_cache = {}
+    
+    with torch.no_grad():
+        # 1、prefill阶段
+        output_logits = model(input_ids,cache=kv_cache)
+        
+        logits = output_logits[:,-1,:]
+        probs = torch.softmax(logits,dim=-1)
+        next_token_id = torch.multinomial(probs,num_samples=1).squeeze(-1)
+
+        generated_token +=1
+
+        # 2、decode阶段
+        
+        next_input = next_token_id.unsqueeze(-1)
+
+        final_output = torch.cat([final_output,next_input],dim=-1)
+        while generated_token<max_len:
+
+            output_logits =  model(next_input,kv_cache)
+            
+            logits = output_logits[:,-1,:]
+            probs = torch.softmax(logits,dim=-1)
+            next_token_id = torch.multinomial(probs,num_samples=1).squeeze(-1)
+
+            next_input = next_token_id.unsqueeze(-1)
+
+            final_output = torch.cat([final_output,next_input],dim=-1)
+
+            generated_token += 1 
+
+    
+    res_list = final_output[0].tolist()
     print(res_list)
-    res = tokenizer.decode(res_list[0])
+    
+    res = tokenizer.decode(res_list)
     print(res)
     return res
 
