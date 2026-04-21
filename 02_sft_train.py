@@ -208,7 +208,9 @@ def train(model,tokenizer,config:SFTConfig):
 
     # 4、SummaryWriter
     writer = SummaryWriter(log_dir="logs/Qwen3-0.6B-SFT")
-
+    # 5、引入progress bar
+    import tqdm
+    progress_bar = tqdm.tqdm(total=total_steps,desc="step")
     total_loss_list = []
     for step in range(total_steps):
         # 1、从train_data中得到当前batch的数据
@@ -221,7 +223,7 @@ def train(model,tokenizer,config:SFTConfig):
         for seq in batch_data:
             current_seq_length = len(seq["input_ids"])
             padding_length = max_len - current_seq_length
-            padded_seq = torch.nn.functional.pad(torch.tensor(seq),(0,padding_length),value=tokenizer.pad_token_id)
+            padded_seq = torch.nn.functional.pad(torch.tensor(seq["input_ids"],dtype=torch.long),(0,padding_length),value=tokenizer.pad_token_id)
             padded_seqs.append(padded_seq.tolist())
         
         # 3、构造input_ids和labels
@@ -239,6 +241,7 @@ def train(model,tokenizer,config:SFTConfig):
 
         if final_mask.sum() == 0:
             print("当前batch当中，没有需要计算损失的token，忽略")
+            progress_bar.update(1)
             continue
 
         # 5、前向传播
@@ -266,6 +269,10 @@ def train(model,tokenizer,config:SFTConfig):
         optimizer.step()
         optimizer.zero_grad()
 
+        progress_bar.update(1)
+        progress_bar.set_postfix(loss=f"{total_loss_list[-1]:.4f}", lr=f"{current_learning_rate:.2e}")
+
+
         should_log = (step+1) % config.logging_steps == 0 or (step+1) == total_steps
         if should_log:
             # 获取到logging_steps个loss
@@ -286,6 +293,6 @@ def main():
     sft_config = SFTConfig()
     train(model=model,tokenizer=tokenizer,config=sft_config)
     save_model_tokenizer(model,tokenizer,sft_config.output_dir)
-    
+
 if __name__ =="__main__":
     main()
