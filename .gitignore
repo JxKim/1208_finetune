@@ -3,3 +3,5 @@ model/
 1208/
 .vscode/
 data/
+.obsidian/
+*.bkp
