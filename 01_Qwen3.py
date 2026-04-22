@@ -413,8 +413,6 @@ class Qwen3Tokenizer:
 
 def generate_text(input_ids,model:Qwen3Model,tokenizer:Qwen3Tokenizer,max_len:int=100):
     
-    
-
     # 每次调用时，重置一下current_pos位置的值
     model.reset_kv_cache()
     generated_token = 0
