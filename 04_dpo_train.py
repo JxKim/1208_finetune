@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import datasets
 from typing import List
 @dataclass
-class SFTConfig:
+class DPOConfig:
     """SFT过程当中，所有的相关配置"""
 
     train_data_size:int = 5000
@@ -12,27 +12,40 @@ class SFTConfig:
     batch_size :int = 4
     warmup_ratio:float = 0.1
     logging_steps:int = 100
-    output_dir:str ="./finetuned/Qwen3-0.6B-SFT"
+    output_dir:str ="./finetuned/Qwen3-0.6B-DPO"
+    beta:float = 0.5
 
 from transformers import AutoTokenizer,AutoModelForCausalLM
-tokenizer = AutoTokenizer.from_pretrained("model/Qwen3-0.6B-Base")
-model = AutoModelForCausalLM.from_pretrained("model/Qwen3-0.6B-Base")
+model_path = "finetuned/Qwen3-0.6B-SFT"
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+model = AutoModelForCausalLM.from_pretrained(model_path)
+ref_model = AutoModelForCausalLM.from_pretrained(model_path)
 # 1、加载数据
-def get_data_ultrachat_200k(config:SFTConfig):
+def get_data_ultrachat_binarized(config:DPOConfig):
     # 2、下载并处理数据集
-    # 2.1 加载UltraChat 200k数据集
-    ultrachat_200k_data:datasets.DatasetDict = datasets.load_dataset("./data/ultrachat_200k")
+    # 2.1 加载UltraChat binarized数据集
+    ultrachat_binarized:datasets.DatasetDict = datasets.load_dataset("./data/ultrafeedback_binarized")
     
-    train_data = [] # 该方法，最终返回的需要训练的数据列表
+    train_chosen_data = [] # 该方法，最终返回的需要训练的数据列表
+    train_rejected_data = []
     i = 0
     # 2.2 对数据进行tokenize处理
     while True:
-        data:List = ultrachat_200k_data["train_sft"][i]["messages"]
+        chosen_data:List = ultrachat_binarized["train_sft"][i]["chosen"]
+        rejected_data:List = ultrachat_binarized["train_sft"][i]["rejected"]
         
-        data.insert(0,{"role":"system","content":"You are a helpful assistant."})
-        input_ids = tokenizer.apply_chat_template(data,tokenize=True,add_generation_prompt=False,truncation=True,max_length=2500)
+        # 分别处理chosen data 和 rejected_data
+
+        chosen_data.insert(0,{"role":"system","content":"You are a helpful assistant."})
+        chosen_tokenized_data = tokenizer.apply_chat_template(chosen_data,tokenize=True,add_generation_prompt=False,truncation=True,max_length=2500)
         
-        train_data.append(input_ids)
+        train_chosen_data.append(chosen_tokenized_data)
+
+        rejected_data.insert(0,{"role":"system","content":"You are a helpful assistant."})
+        rejected_tokenized_data = tokenizer.apply_chat_template(rejected_data,tokenize=True,add_generation_prompt=False,truncation=True,max_length=2500)
+        
+        train_rejected_data.append(rejected_tokenized_data)
+
         i += 1
         if i % 1000 == 0:
             print(f"已经处理了 {i} 条数据")
@@ -40,7 +53,7 @@ def get_data_ultrachat_200k(config:SFTConfig):
         if i == config.train_data_size:
             break
     
-    return train_data
+    return train_chosen_data,train_rejected_data
 
 from transformers import PreTrainedTokenizerFast
 import torch
@@ -189,9 +202,6 @@ def compute_loss(chosen_log_probs,rejected_log_probs,reference_chosen_log_probs,
 
     return average_batch_loss
 
-
-
-
 def cosine_decay(total_steps,current_step,warmup_ratio,max_learning_rate, min_learning_rate):
     """
     学习率调度器：
@@ -210,19 +220,21 @@ def cosine_decay(total_steps,current_step,warmup_ratio,max_learning_rate, min_le
     
 
 from torch.utils.tensorboard import SummaryWriter
-def train(model,tokenizer,config:SFTConfig):
+def train(model,ref_model,tokenizer,config:DPOConfig):
     
     model.to(config.device)
+    ref_model.to(config.device)
     model.train()
+    ref_model.eval()
 
     # 构造相关的实例
     # 1、优化器
     optimizer = torch.optim.AdamW(model.parameters(),lr=config.max_lr_rate)
     # 2、获取数据集
-    train_data = get_data_ultrachat_200k(config)
+    train_chosen_data,train_rejected_data = get_data_ultrachat_binarized(config)
 
     # 3、算出总共有多少step
-    total_steps = (len(train_data) + config.batch_size -1)// config.batch_size
+    total_steps = (len(train_chosen_data) + config.batch_size -1)// config.batch_size
 
     # 4、SummaryWriter
     writer = SummaryWriter(log_dir="logs/Qwen3-0.6B-SFT")
@@ -231,43 +243,77 @@ def train(model,tokenizer,config:SFTConfig):
     progress_bar = tqdm.tqdm(total=total_steps,desc="step")
     total_loss_list = []
     for step in range(total_steps):
+        # 分别处理train_chose_data, train_rejected_data
         # 1、从train_data中得到当前batch的数据
-        batch_data = train_data[step * config.batch_size:(step+1) * config.batch_size]
+        chosen_batch_data = train_chosen_data[step * config.batch_size:(step+1) * config.batch_size]
+        rejected_batch_data = train_rejected_data[step * config.batch_size:(step+1) * config.batch_size]
 
         # 2、padding
-        max_len = max([len(seq["input_ids"]) for seq in batch_data])
+        # 2.1 对于chosen data 做padding 以及获取chose_input_ids和chosen_labels
+        max_chosen_len = max([len(seq["input_ids"]) for seq in chosen_batch_data])
 
-        padded_seqs = []
-        for seq in batch_data:
+        chosen_padded_seqs = []
+        for seq in chosen_batch_data:
             current_seq_length = len(seq["input_ids"])
-            padding_length = max_len - current_seq_length
+            padding_length = max_chosen_len - current_seq_length
             padded_seq = torch.nn.functional.pad(torch.tensor(seq["input_ids"],dtype=torch.long),(0,padding_length),value=tokenizer.pad_token_id)
-            padded_seqs.append(padded_seq.tolist())
+            chosen_padded_seqs.append(padded_seq.tolist())
         
-        # 3、构造input_ids和labels
-        padded_seq_tensor = torch.tensor(padded_seqs,dtype=torch.long).to(config.device)
+        # 构造input_ids和labels
+        chosen_padded_seq_tensor = torch.tensor(chosen_padded_seqs,dtype=torch.long).to(config.device)
 
-        input_ids = padded_seq_tensor[:,:-1]
-        labels = padded_seq_tensor[:,1:]
+        chosen_input_ids = chosen_padded_seq_tensor[:,:-1]
+        chosen_labels = chosen_padded_seq_tensor[:,1:]
+
+        # 2.2 对于rejected_data 做padding 以及获取rejected_input_ids和rejected_labels
+        max_rejected_len = max([len(seq["input_ids"]) for seq in rejected_batch_data])
+
+        rejected_padded_seqs = []
+        for seq in rejected_batch_data:
+            current_seq_length = len(seq["input_ids"])
+            padding_length = max_rejected_len - current_seq_length
+            padded_seq = torch.nn.functional.pad(torch.tensor(seq["input_ids"],dtype=torch.long),(0,padding_length),value=tokenizer.pad_token_id)
+            rejected_padded_seqs.append(padded_seq.tolist())
+        
+        # 构造input_ids和labels
+        rejected_padded_seq_tensor = torch.tensor(rejected_padded_seqs,dtype=torch.long).to(config.device)
+
+        rejected_input_ids = rejected_padded_seq_tensor[:,:-1]
+        rejected_labels = rejected_padded_seq_tensor[:,1:]
         
 
-        # 4、构建掩码
-        assistant_answer_mask = create_answer_mask(input_ids,tokenizer)
-        # padding_mask：是pad_token_id的地方为0，不是pad_token_id为1
-        padding_mask = torch.where(labels==tokenizer.pad_token_id,0,1)
-        final_mask = assistant_answer_mask * padding_mask
+        # 3、构建掩码
+        chosen_assistant_answer_mask = create_answer_mask(chosen_input_ids,tokenizer)
+        rejected_assistant_answer_mask = create_answer_mask(rejected_input_ids,tokenizer)
 
-        if final_mask.sum() == 0:
+        # # padding_mask：是pad_token_id的地方为0，不是pad_token_id为1
+        # padding_mask = torch.where(labels==tokenizer.pad_token_id,0,1)
+        # final_mask = assistant_answer_mask * padding_mask
+
+        if chosen_assistant_answer_mask.sum() == 0 or rejected_assistant_answer_mask.sum()==0:
             print("当前batch当中，没有需要计算损失的token，忽略")
             progress_bar.update(1)
             continue
 
-        # 5、前向传播
+        # 4、前向传播
 
-        output_logits = model(input_ids).logits
+        chosen_output_logits = model(chosen_input_ids).logits
+        rejected_output_logits = model(rejected_input_ids).logits
+
+        with torch.no_grad():
+            reference_chosen_output_logits = ref_model(chosen_input_ids).logits
+            reference_rejected_output_logits = ref_model(rejected_input_ids).logits
+
+        # 5、计算每个序列的平均对数概率
+        chosen_average_log_probs = compute_log_probs(chosen_output_logits,chosen_labels,chosen_assistant_answer_mask)
+        rejected_average_log_probs = compute_log_probs(rejected_output_logits,rejected_labels,rejected_assistant_answer_mask)
+
+        ref_chosen_average_log_probs = compute_log_probs(reference_chosen_output_logits,chosen_labels,chosen_assistant_answer_mask)
+        ref_rejected_average_log_probs = compute_log_probs(reference_rejected_output_logits,rejected_labels,rejected_assistant_answer_mask)
 
         # 6、计算损失
-        loss = compute_loss(output_logits,labels,final_mask)
+        loss = compute_loss(chosen_average_log_probs,rejected_average_log_probs,ref_chosen_average_log_probs,ref_rejected_average_log_probs,config.beta)
+
 
         total_loss_list.append(loss.item())
         # 7、loss反向传播
@@ -295,7 +341,7 @@ def train(model,tokenizer,config:SFTConfig):
         if should_log:
             # 获取到logging_steps个loss
             loss_list = total_loss_list[-config.logging_steps:]
-            average_loss = sum(loss_list) / config.logging_steps
+            average_loss = sum(loss_list) / len(loss_list)
 
             writer.add_scalar("Loss",scalar_value=average_loss,global_step=step)
 
@@ -308,9 +354,9 @@ def save_model_tokenizer(model,tokenizer,output_dir):
 
 def main():
 
-    sft_config = SFTConfig()
-    train(model=model,tokenizer=tokenizer,config=sft_config)
-    save_model_tokenizer(model,tokenizer,sft_config.output_dir)
+    dpo_config = DPOConfig()
+    train(model=model,tokenizer=tokenizer,config=dpo_config,ref_model=ref_model)
+    save_model_tokenizer(model,tokenizer,dpo_config.output_dir)
 
 if __name__ =="__main__":
     main()

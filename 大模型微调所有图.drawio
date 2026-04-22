@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6" pages="4">
   <diagram name="04-LLM微调" id="OrEi-5PVO_2H19bgJWWD">
-    <mxGraphModel dx="5719" dy="2531" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="4542" dy="1768" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -1005,6 +1005,30 @@
         </mxCell>
         <mxCell id="bEK8MBqZG5GTdF1q4je4-8" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="不开启thinking 模式" vertex="1">
           <mxGeometry height="30" width="185" x="-188" y="123" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-9" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="LLM" vertex="1">
+          <mxGeometry height="30" width="60" x="-800" y="2729" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-11" parent="1" style="shape=curlyBracket;whiteSpace=wrap;html=1;rounded=1;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="" vertex="1">
+          <mxGeometry height="120" width="20" x="-717" y="2684" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-12" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="参数：各大厂商在huggingface开源的这些模型文件" vertex="1">
+          <mxGeometry height="30" width="478" x="-697" y="2662" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-13" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="运算结构：" vertex="1">
+          <mxGeometry height="30" width="113" x="-694" y="2789" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-14" parent="1" style="shape=curlyBracket;whiteSpace=wrap;html=1;rounded=1;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="" vertex="1">
+          <mxGeometry height="244" width="20" x="-588" y="2739" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-15" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="Transformers: Qwen3模型 实际的运算结构，有一套定义；怎么让运算兼容transformers当中的其他库，例如训练库trl等" vertex="1">
+          <mxGeometry height="30" width="353" x="-551" y="2737" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-16" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="vLLM: Qwen3 实际的运算结构，也有一套定义；怎么让这个运算结构，在实际推理过程当中能够运算得很快，占用的显存更低" vertex="1">
+          <mxGeometry height="30" width="353" x="-561" y="2873" as="geometry" />
+        </mxCell>
+        <mxCell id="bEK8MBqZG5GTdF1q4je4-17" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;" value="我: Qwen3 实际的运算结构，也有一套定义；怎么让你们去以最方便的方式理解qwen的结构" vertex="1">
+          <mxGeometry height="30" width="353" x="-557" y="2980" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
