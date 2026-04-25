@@ -10,7 +10,7 @@ lora_config = LoraConfig(
     lora_alpha=16,
     lora_dropout=0.05,
     bias="none",
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],#"all-linear"
     task_type="CAUSAL_LM",
 )
 

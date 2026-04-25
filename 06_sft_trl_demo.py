@@ -53,6 +53,7 @@ config = SFTConfig(
 )
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.models.qwen3 import Qwen3ForCausalLM
 # 3、加载模型和tokenizer
 model = AutoModelForCausalLM.from_pretrained(r"model/Qwen3-0.6B/")
 tokenizer = AutoTokenizer.from_pretrained(r"model/Qwen3-0.6B/")
